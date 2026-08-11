@@ -14,10 +14,10 @@ app.use(express.json());
 
 app.get("/", (_req, res) => {
   res.json({
-    name: "chess-stockfish-api",
+    name: "chess-api",
     endpoints: {
       "GET /api/health": "kiểm tra trạng thái server",
-      "POST /api/best-move": "body: { fen, depth?, movetimeMs? } -> nước đi tốt nhất",
+      "POST /api/best-move": "body: { fen, depth?, movetimeMs?, elo? } -> nước đi tốt nhất",
     },
   });
 });
@@ -28,8 +28,8 @@ app.get("/api/health", (_req, res) => {
 
 app.post("/api/best-move", async (req, res, next) => {
   try {
-    const { fen, depth, movetimeMs } = req.body || {};
-    const result = await engine.getBestMove(fen, { depth, movetimeMs });
+    const { fen, depth, movetimeMs, elo } = req.body || {};
+    const result = await engine.getBestMove(fen, { depth, movetimeMs, elo });
     res.json(result);
   } catch (err) {
     next(err);
@@ -50,5 +50,5 @@ app.use((err, req, res, next) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`chess-stockfish-api đang chạy tại http://localhost:${PORT}`);
+  console.log(`chess-api đang chạy tại http://localhost:${PORT}`);
 });

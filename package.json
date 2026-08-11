@@ -1,5 +1,5 @@
 {
-  "name": "chess-stockfish-api",
+  "name": "chess-api",
   "version": "1.0.0",
   "description": "",
   "main": "src/server.js",
@@ -7,7 +7,10 @@
     "start": "node src/server.js",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["chess", "stockfish", "api"],
+  "keywords": [
+    "chess",
+    "api"
+  ],
   "author": "",
   "license": "ISC",
   "type": "commonjs",

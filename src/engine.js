@@ -8,7 +8,10 @@ const DEFAULT_DEPTH = 15;
 const MAX_DEPTH = 25;
 const MIN_MOVETIME_MS = 100;
 const MAX_MOVETIME_MS = 15000;
+const MIN_ELO = 1320;
+const MAX_ELO = 3190;
 const COMMAND_TIMEOUT_MS = 20000;
+const STOP_GRACE_PERIOD_MS = 5000;
 
 class HttpError extends Error {
   constructor(status, message) {
@@ -25,7 +28,18 @@ class ChessEngine {
 
   async _getEngine() {
     if (!this._enginePromise) {
-      this._enginePromise = this._createEngine();
+      const enginePromise = this._createEngine();
+      this._enginePromise = enginePromise;
+
+      try {
+        return await enginePromise;
+      } catch (error) {
+        // Cho phép request sau khởi tạo lại nếu lần khởi tạo này thất bại.
+        if (this._enginePromise === enginePromise) {
+          this._enginePromise = null;
+        }
+        throw error;
+      }
     }
     return this._enginePromise;
   }
@@ -67,6 +81,16 @@ class ChessEngine {
     return result;
   }
 
+  async _setStrength(engine, elo) {
+    if (elo) {
+      engine.sendCommand("setoption name UCI_LimitStrength value true");
+      engine.sendCommand(`setoption name UCI_Elo value ${elo}`);
+    } else {
+      engine.sendCommand("setoption name UCI_LimitStrength value false");
+    }
+    await this._waitFor(engine, "isready", (line) => line === "readyok");
+  }
+
   async getBestMove(fen, options = {}) {
     if (!isValidFen(fen)) {
       throw new HttpError(400, "fen không hợp lệ");
@@ -76,9 +100,12 @@ class ChessEngine {
     const movetimeMs = options.movetimeMs
       ? clampInt(options.movetimeMs, MIN_MOVETIME_MS, MIN_MOVETIME_MS, MAX_MOVETIME_MS)
       : null;
+    const elo = options.elo != null ? clampInt(options.elo, null, MIN_ELO, MAX_ELO) : null;
 
     return this._enqueue(async () => {
       const engine = await this._getEngine();
+
+      await this._setStrength(engine, elo);
 
       engine.sendCommand(`position fen ${fen}`);
 
@@ -86,17 +113,32 @@ class ChessEngine {
 
       let lastInfo = null;
       const bestmoveLine = await new Promise((resolve, reject) => {
-        const timer = setTimeout(() => {
+        let hardTimeout = null;
+
+        const cleanup = () => {
+          clearTimeout(softTimeout);
+          if (hardTimeout) clearTimeout(hardTimeout);
           engine.listener = null;
-          reject(new Error("Stockfish timed out tính nước đi"));
+        };
+
+        // Depth không đảm bảo hoàn thành trong một khoảng thời gian cố định.
+        // Khi hết thời gian, yêu cầu Stockfish trả nước tốt nhất đã tìm được
+        // thay vì bỏ listener trong lúc engine vẫn đang chạy.
+        const softTimeout = setTimeout(() => {
+          engine.sendCommand("stop");
+
+          hardTimeout = setTimeout(() => {
+            cleanup();
+            this._enginePromise = null;
+            reject(new Error("Stockfish không phản hồi sau khi yêu cầu dừng"));
+          }, STOP_GRACE_PERIOD_MS);
         }, COMMAND_TIMEOUT_MS);
 
         engine.listener = (line) => {
           if (line.startsWith("info") && line.includes(" score ")) {
             lastInfo = line;
           } else if (line.startsWith("bestmove")) {
-            clearTimeout(timer);
-            engine.listener = null;
+            cleanup();
             resolve(line);
           }
         };

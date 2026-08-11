@@ -1,4 +1,4 @@
-# chess-stockfish-api
+# chess-api
 
 API Node.js/Express dùng engine Stockfish (WASM) để trả về nước đi tốt nhất từ một thế cờ (FEN).
 
@@ -25,6 +25,7 @@ Body (JSON):
 | `fen`       | string | có       | Chuỗi FEN của thế cờ                                             |
 | `depth`     | number | không    | Độ sâu tìm kiếm (mặc định 15, tối đa 25). Bỏ qua nếu có `movetimeMs` |
 | `movetimeMs`| number | không    | Thời gian nghĩ (ms), 100–15000. Nếu có sẽ dùng thay cho `depth`  |
+| `elo`       | number | không    | Elo mong muốn của engine, 1320–3190. Nếu bỏ qua, engine chơi hết sức (không giới hạn) |
 
 Ví dụ:
 
@@ -54,3 +55,4 @@ Response:
 
 - Dùng package `stockfish` (bản lite single-threaded, cấu hình qua biến môi trường `STOCKFISH_ENGINE`: `lite-single` | `lite` | `single` | `full` | `asm`).
 - Engine được khởi tạo một lần và xử lý tuần tự (hàng đợi) để tránh xung đột giao thức UCI khi có nhiều request đồng thời.
+- Khi có `elo`, server set `UCI_LimitStrength=true` và `UCI_Elo=<elo>` trước mỗi lần tìm nước đi; nếu không có `elo`, server tắt giới hạn để trả về nước đi mạnh nhất. Giá trị `elo` được kẹp trong khoảng 1320–3190 (giới hạn của Stockfish).
